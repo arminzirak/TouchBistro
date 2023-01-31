@@ -1,35 +1,39 @@
 import pandas as pd
+from configs import COVID_CASES_ADDRESS, WINDOW_START, WINDOW_END, \
+    RESTAURANTS_REVENUE_ADDRESS, RESTAURANTS_REVENUE_SHEET, RESULTS_ADDRESS, \
+    FIRST_DAY_OF_WEEK, SELECTED_PROVINCE
+import os
 
-WINDOW_START = "2020-03-20"
-WINDOW_END = "2021-01-01"
 
-restaurant_revenues = pd.read_excel('./data/takehome_exercise_v2.xlsx', sheet_name='Sample Restaurant Revenue')
-restaurant_revenues_ontario = restaurant_revenues[restaurant_revenues['Province'] == 'ON']
-# restaurant_revenues_ontario['Date'] = restaurant_revenues_ontario['Date'] + pd.offsets.DateOffset(years=2)
-restaurant_revenues_ontario_timeFiltered = restaurant_revenues_ontario[
-    (WINDOW_END >= restaurant_revenues_ontario['Date']) & (restaurant_revenues_ontario['Date'] >= WINDOW_START)]
+def process_data():
+    if not os.path.exists(COVID_CASES_ADDRESS) or not os.path.exists(RESTAURANTS_REVENUE_ADDRESS):
+        raise FileNotFoundError('Input data is not provided')
 
-cases = pd.read_csv('data/timeseries.csv')
-cases['week'] = pd.to_datetime(cases['date']).dt.week
-cases['day'] = pd.to_datetime(cases['date']).dt.dayofweek
-cases['corrected_week'] = cases['week'] + (cases['day'] >= 4)
-cases_aggregated = cases.groupby('corrected_week').agg({'value_daily': ['max', 'min', 'mean', 'var'],
-                                                        'date': ['min', 'max']}).reset_index()
+    revenues = pd.read_excel(RESTAURANTS_REVENUE_ADDRESS, sheet_name=RESTAURANTS_REVENUE_SHEET)
+    revenues = revenues[revenues['Province'] == SELECTED_PROVINCE]
+    revenues = revenues[
+        (WINDOW_END >= revenues['Date']) & (revenues['Date'] >= WINDOW_START)]
 
-restaurant_revenues_ontario_timeFiltered['week'] = restaurant_revenues_ontario_timeFiltered['Date'].dt.week
-restaurant_revenues_ontario_timeFiltered['day'] = restaurant_revenues_ontario_timeFiltered['Date'].dt.dayofweek
-restaurant_revenues_ontario_timeFiltered['corrected_week'] = \
-    restaurant_revenues_ontario_timeFiltered['week'] + (restaurant_revenues_ontario_timeFiltered['day'] >= 4)
+    revenues['week'] = revenues['Date'].dt.isocalendar().week
+    revenues['day'] = revenues['Date'].dt.dayofweek
+    revenues['corrected_week'] = revenues['week'] + (revenues['day'] >= FIRST_DAY_OF_WEEK)
 
-restaurant_revenues_ontario_timeFiltered_aggregated = \
-    restaurant_revenues_ontario_timeFiltered \
-        .groupby(['Restaurant ID', 'corrected_week']).agg({'Revenue': ['max', 'min', 'sum', 'var']}).reset_index()
+    revenues_aggregated = revenues \
+        .groupby(['Restaurant ID', 'corrected_week']) \
+        .agg({'Revenue': ['max', 'min', 'sum', 'var']}) \
+        .reset_index()
+    revenues_aggregated.loc[:, ('Revenue', 'average')] = revenues_aggregated.loc[:, ('Revenue', 'sum')] / 7
 
-restaurant_revenues_ontario_timeFiltered_aggregated.loc[:, ('Revenue', 'average')] \
-    = restaurant_revenues_ontario_timeFiltered_aggregated.loc[:, ('Revenue', 'sum')] / 7
+    covid_cases = pd.read_csv(COVID_CASES_ADDRESS)
+    covid_cases.loc[:, 'week'] = pd.to_datetime(covid_cases['date']).dt.isocalendar().week
+    covid_cases.loc[:, 'day'] = pd.to_datetime(covid_cases['date']).dt.dayofweek
+    covid_cases.loc[:, 'corrected_week'] = covid_cases['week'] + (covid_cases['day'] >= FIRST_DAY_OF_WEEK)
+    covid_cases.rename(columns={'value_daily': 'covid_cases_daily'}, inplace=True)
+    covid_cases_aggregated = covid_cases \
+        .groupby('corrected_week') \
+        .agg({'covid_cases_daily': ['max', 'min', 'mean', 'var'], 'date': ['min', 'max']}) \
+        .reset_index()
 
-print(len(cases_aggregated), len(restaurant_revenues_ontario_timeFiltered_aggregated))
-combined_data = pd.merge(restaurant_revenues_ontario_timeFiltered_aggregated,
-                         cases_aggregated, on='corrected_week')
-
-combined_data.to_csv('./output/results.csv')
+    combined_data = pd.merge(revenues_aggregated, covid_cases_aggregated, on='corrected_week')
+    combined_data.to_csv(RESULTS_ADDRESS)
+    return True
