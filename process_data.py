@@ -10,6 +10,7 @@ def process_data():
         raise FileNotFoundError('Input data is not provided')
 
     revenues = pd.read_excel(RESTAURANTS_REVENUE_ADDRESS, sheet_name=RESTAURANTS_REVENUE_SHEET)
+
     revenues = revenues[revenues['Province'] == SELECTED_PROVINCE]
     revenues = revenues[
         (WINDOW_END >= revenues['Date']) & (revenues['Date'] >= WINDOW_START)]
@@ -25,10 +26,13 @@ def process_data():
     revenues_aggregated.loc[:, ('Revenue', 'average')] = revenues_aggregated.loc[:, ('Revenue', 'sum')] / 7
 
     covid_cases = pd.read_csv(COVID_CASES_ADDRESS)
+
     covid_cases.loc[:, 'week'] = pd.to_datetime(covid_cases['date']).dt.isocalendar().week
     covid_cases.loc[:, 'day'] = pd.to_datetime(covid_cases['date']).dt.dayofweek
     covid_cases.loc[:, 'corrected_week'] = covid_cases['week'] + (covid_cases['day'] >= FIRST_DAY_OF_WEEK)
+
     covid_cases.rename(columns={'value_daily': 'covid_cases_daily'}, inplace=True)
+
     covid_cases_aggregated = covid_cases \
         .groupby('corrected_week') \
         .agg({'covid_cases_daily': ['max', 'min', 'mean', 'var'], 'date': ['min', 'max']}) \
@@ -36,4 +40,3 @@ def process_data():
 
     combined_data = pd.merge(revenues_aggregated, covid_cases_aggregated, on='corrected_week')
     combined_data.to_csv(RESULTS_ADDRESS)
-    return True

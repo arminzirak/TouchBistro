@@ -7,6 +7,7 @@ def fetch_covid_cases():
                           params={'fmt': 'csv', 'legacy': 'false', 'hr_names': 'hruid', 'pt_names': 'short',
                                   'fill': 'true', 'after': WINDOW_START, 'before': WINDOW_END,
                                   'loc': SELECTED_PROVINCE, 'geo': 'pt', 'stat': 'cases'})
+
     if result.status_code != 200:
         raise RuntimeError('API Call Status Code : {}'.format(result.status_code))
 
