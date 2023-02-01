@@ -3,3 +3,7 @@ select employee_id,
 from employee_activity
 where ("end_time" is not null or "start_time" >= '2022-04-14 21:00:00')
 group by employee_id;
+
+-- assumptions:
+-- 1. Each employee_id refers to a unique employee and each employee has only one employee_id
+-- 2. Datetime fields have no timezones
